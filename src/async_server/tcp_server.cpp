@@ -3,6 +3,7 @@
 #include <memory>
 #include <utility>
 #include <boost/asio.hpp>
+#include <boost/program_options.hpp>
 
 using boost::asio::ip::tcp;
 
@@ -69,13 +70,24 @@ private:
 
 int main(int argc, char* argv[]) {
     try {
-        if (argc != 2) {
-            std::cerr << "Usage: async_tcp_echo_server <port>\n";
-            return 1;
+        short port;
+        namespace po = boost::program_options;
+        po::options_description desc("Allowed options");
+        desc.add_options()
+            ("help,h", "Show help")
+            ("port,P", po::value<short>(&port)->required(),"Connect to the port");
+    
+        po::variables_map vm;
+        po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+        if (vm.count("help")) {
+            std::cout << "Usage: client [options]\n";
+            std::cout << desc;
+            return 0;
         }
-    boost::asio::io_context io_context;
-    server s(io_context, std::atoi(argv[1]));
-    io_context.run();
+        po::notify(vm);
+        boost::asio::io_context io_context;
+        server s(io_context, port);
+        io_context.run();
     }
     catch (std::exception& e) {
         std::cerr << "Exception: " << e.what() << "\n";
