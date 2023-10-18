@@ -10,18 +10,20 @@ using boost::asio::ip::tcp;
 
 enum { max_length = 1024 };
 
-void run(std::string host, std::string port, int loops) {
+void run(std::string host, std::string port, int thread_number, int loops) {
     try {
         boost::asio::io_context io_context;
         tcp::socket socket(io_context);
         tcp::resolver resolver(io_context);
         boost::asio::connect(socket, resolver.resolve(host, port));
-
+        std::string reply_prefix = "Reply is: ";
         for (auto i = 0; i < loops; ++i) {
-            std::string message = "hello";
-            boost::asio::write(socket, boost::asio::buffer(message.c_str(), message.size()));
+            std::string message = "hello from " + std::to_string(thread_number) + ", time " + std::to_string(i+1);
+            std::cout << message << std::endl;
+            boost::asio::write(socket, boost::asio::buffer(message.c_str(), message.size() + reply_prefix.size()));
             char reply[max_length];
-            boost::asio::read(socket, boost::asio::buffer(reply, message.size()));
+            boost::asio::read(socket, boost::asio::buffer(reply, message.size() + reply_prefix.size()));
+            std::cout << reply << std::endl;
         }
     }
     catch (std::exception &e) {
@@ -54,7 +56,7 @@ int main(int argc, const char* argv[]) {
         std::vector<std::thread> threads;
         threads.reserve(threads_count);
         for (auto i = 0; i < threads_count; ++i)
-            threads.push_back(std::thread(run, host, port, loops));
+            threads.push_back(std::thread(run, host, port, i + 1, loops));
         for (auto &t: threads)
             t.join();
     }
