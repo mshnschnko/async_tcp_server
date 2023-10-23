@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <thread>
+#include <mutex>
 #include <boost/asio.hpp>
 #include <boost/program_options.hpp>
 
@@ -10,7 +11,8 @@ using boost::asio::ip::tcp;
 
 enum { max_length = 1024 };
 
-void run(std::string host, std::string port, int thread_number, int loops) {
+
+void run(std::string host, std::string port, int thread_number, int loops, std::mutex& io_mutex) {
     try {
         boost::asio::io_context io_context;
         tcp::socket socket(io_context);
@@ -19,11 +21,15 @@ void run(std::string host, std::string port, int thread_number, int loops) {
         std::string reply_prefix = "Reply is: ";
         for (auto i = 0; i < loops; ++i) {
             std::string message = "hello from " + std::to_string(thread_number) + ", time " + std::to_string(i+1);
+            io_mutex.lock();
             std::cout << message << std::endl;
-            boost::asio::write(socket, boost::asio::buffer(message.c_str(), message.size() + reply_prefix.size()));
+            io_mutex.unlock();
+            boost::asio::write(socket, boost::asio::buffer(message.c_str(), message.size()));
             char reply[max_length];
-            boost::asio::read(socket, boost::asio::buffer(reply, message.size() + reply_prefix.size()));
-            std::cout << reply << std::endl;
+            boost::asio::read(socket, boost::asio::buffer(reply, message.size()));
+            io_mutex.lock();
+            std::cout << reply_prefix + reply << std::endl;
+            io_mutex.unlock();
         }
     }
     catch (std::exception &e) {
@@ -55,8 +61,9 @@ int main(int argc, const char* argv[]) {
 
         std::vector<std::thread> threads;
         threads.reserve(threads_count);
+        std::mutex io_mutex;
         for (auto i = 0; i < threads_count; ++i)
-            threads.push_back(std::thread(run, host, port, i + 1, loops));
+            threads.push_back(std::thread(run, host, port, i + 1, loops, std::ref(io_mutex)));
         for (auto &t: threads)
             t.join();
     }
